@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  #API Server
+  api_server:
+    build: ./api_server
+    container_name: api_server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api_server:/app
+    networks:
+      - dragonfly_net
+
+networks:
+  dragonfly_net:
+    driver: bridge
