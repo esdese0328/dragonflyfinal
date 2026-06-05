@@ -21,6 +21,9 @@ class TaskResponseModel(BaseModel):
     status: str
     worker_id: Optional[str] = None
     retry_count: int = 0
+    duration: Optional[float] = None
+    completed_at: Optional[str] = None
+    progress: int = 0
 
 class TaskAssign(BaseModel):
     worker_id: str
@@ -57,7 +60,10 @@ def create_task(task: TaskCreateModel):
         "task_id": new_task_id,
         "task_name": task.task_name,
         "status": "pending",
-        "retry_count": 0
+        "retry_count": 0,
+        "duration": None,
+        "completed_at": None,
+        "progress": 0
     }
 
 #查詢任務狀態
@@ -85,7 +91,10 @@ def get_tasks(status: Optional[str] = None):
             "task_name": row["task_name"],
             "status": row["status"],
             "worker_id": row["worker_id"],
-            "retry_count": row["retry_count"]
+            "retry_count": row["retry_count"],
+            "duration": row["duration"],
+            "completed_at": row["completed_at"],
+            "progress": row["progress"]
         })
     return result
 
@@ -106,6 +115,36 @@ def assign_task(task_id: str, payload: TaskAssign):
     conn.close()
     
     return {"message": f"Task {task_id} assigned to {payload.worker_id}"}
+
+#更新任務進度
+class TaskProgressUpdate(BaseModel):
+    progress: int
+    duration: Optional[float] = None
+
+@app.put("/tasks/{task_id}/progress")
+def update_task_progress(task_id: str, payload: TaskProgressUpdate):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    #若進度到達100，則自動更新為 completed 並記錄完成時間
+    if payload.progress >= 100:
+        tz_utc_8 = timezone(timedelta(hours=8))
+        current_time = datetime.now(tz_utc_8).strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            UPDATE tasks 
+            SET progress = 100, status = 'completed', completed_at = ?, duration = ?
+            WHERE task_id = ?
+        ''', (current_time, payload.duration, task_id))
+    else:
+        cursor.execute('''
+            UPDATE tasks 
+            SET progress = ?
+            WHERE task_id = ?
+        ''', (payload.progress, task_id))
+        
+    conn.commit()
+    conn.close()
+    return {"message": f"Task {task_id} progress updated to {payload.progress}"}
 
 #建立Worker
 @app.post("/create_worker", response_model=WorkerResponseModel)
@@ -168,3 +207,19 @@ def update_worker_heartbeat(worker_id: str):
     conn.close()
     
     return {"message": f"Heartbeat updated for worker {worker_id}"}
+
+#任務失敗重新排程 (Retry)
+@app.put("/tasks/{task_id}/retry")
+def retry_task(task_id: str):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE tasks 
+        SET retry_count = retry_count + 1, status = 'pending', worker_id = NULL
+        WHERE task_id = ?
+    ''', (task_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"message": f"Task {task_id} set to retry"}
