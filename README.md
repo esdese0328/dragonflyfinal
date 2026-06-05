@@ -34,6 +34,8 @@ docker-compose exec -d api_server python simulate_worker.py
 *(加上 `-d` 代表腳本會在容器背景默默執行，你現在可以把終端機關掉了)*
 
 ### 3. 觀看測試成果
+<img width="1913" height="896" alt="image" src="https://github.com/user-attachments/assets/b332c1c5-c7fd-4a62-ab64-3afb286d4d79" />
+
 
 1. 模擬腳本啟動後，請前往 Dashboard: **[http://localhost:9000](http://localhost:9000)**
 2. 點開左上角的側邊欄（如果有隱藏請展開），勾選「**自動更新 (每2秒)**」。
