@@ -58,21 +58,21 @@ Remove-Item api_server\scheduler.db -ErrorAction SilentlyContinue
 目前的 Dashboard 呈現的是由模擬器產生的假數據。接下來要將系統推向完成，還需要依賴以下組員的進度，請各負責人進行後續開發與對接：
 
 ### 第 1 人 (系統架構與分散式模式設計)
-- [ ] 負責整體架構圖與報告主軸。
-- [ ] 準備期末 Demo 劇本與簡報故事線。
+- 負責整體架構圖與報告主軸。
+-  準備期末 Demo 劇本與簡報故事線。
 
 ### 第 2 人 (Artifact Repository & Adapter)
-- [ ] 建立 File Server 與真實的 100MB / 500MB / 1GB 測試檔案。
-- [ ] 撰寫 `download_adapter.py` 並支援 curl 與 dfget 下載模式。
+-  建立 File Server 與真實的 100MB / 500MB / 1GB 測試檔案。
+- 撰寫 `download_adapter.py` 並支援 curl 與 dfget 下載模式。
 
 ### 第 4 人 (Scheduler 排程器)
-- [ ] 取代模擬器的任務分配功能，實作掃描 pending 任務並分配給 idle Worker 的邏輯。
-- [ ] **與 Dashboard 的交接點**：需實作偵測 Worker Heartbeat timeout。當 Worker 死亡時，請確實讓任務的 `retry_count + 1` 並設回 `pending`，Dashboard 才能正確畫出**「故障恢復紀錄」**。
+-  取代模擬器的任務分配功能，實作掃描 pending 任務並分配給 idle Worker 的邏輯。
+-  **與 Dashboard 的交接點**：需實作偵測 Worker Heartbeat timeout。當 Worker 死亡時，請確實讓任務的 `retry_count + 1` 並設回 `pending`，Dashboard 才能正確畫出**「故障恢復紀錄」**。
 
 ### 第 5 人 (Worker / Downloader)
-- [ ] 實作真正的 Worker：向 API 註冊 ID，並實際呼叫第 2 人的 Adapter 下載檔案。
-- [ ] **與 Dashboard 的交接點**：請務必定時呼叫 `PUT /workers/{worker_id}/heartbeat` 更新存活狀態，並在下載過程中不斷呼叫 `PUT /tasks/{task_id}/progress` 推進進度條。
+-  實作真正的 Worker：向 API 註冊 ID，並實際呼叫第 2 人的 Adapter 下載檔案。
+-  **與 Dashboard 的交接點**：請務必定時呼叫 `PUT /workers/{worker_id}/heartbeat` 更新存活狀態，並在下載過程中不斷呼叫 `PUT /tasks/{task_id}/progress` 推進進度條。
 
 ### 第 7 人 (Benchmark 與 Fault Recovery 實驗)
-- [ ] 設計測速腳本與故障注入測試（例如故意 kill worker 來測試第 4 人的機制）。
-- [ ] **與 Dashboard 的交接點**：在使用 API 建立測試任務時，請務必在 `task_name` 中包含 **`[curl]`** 或是 **`[dfget]`** 關鍵字（例如：`[curl] 500MB 測試`）。如此一來 Dashboard 才能在圖表區自動幫你畫出「效能比較箱型圖」！
+-  設計測速腳本與故障注入測試（例如故意 kill worker 來測試第 4 人的機制）。
+-  **與 Dashboard 的交接點**：在使用 API 建立測試任務時，請務必在 `task_name` 中包含 **`[curl]`** 或是 **`[dfget]`** 關鍵字（例如：`[curl] 500MB 測試`）。如此一來 Dashboard 才能在圖表區自動幫你畫出「效能比較箱型圖」！
