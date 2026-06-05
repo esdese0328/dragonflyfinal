@@ -15,7 +15,10 @@ def init_db():
             task_name TEXT NOT NULL,
             status TEXT NOT NULL,
             worker_id TEXT,
-            retry_count INTEGER DEFAULT 0
+            retry_count INTEGER DEFAULT 0,
+            duration REAL,
+            completed_at TIMESTAMP,
+            progress INTEGER DEFAULT 0
         )
     ''')
 
