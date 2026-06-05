@@ -75,4 +75,4 @@ Remove-Item api_server\scheduler.db -ErrorAction SilentlyContinue
 
 ### 第 7 人 (Benchmark 與 Fault Recovery 實驗)
 -  設計測速腳本與故障注入測試（例如故意 kill worker 來測試第 4 人的機制）。
--  **與 Dashboard 的交接點**：在使用 API 建立測試任務時，請務必在 `task_name` 中包含 **`[curl]`** 或是 **`[dfget]`** 關鍵字（例如：`[curl] 500MB 測試`）。如此一來 Dashboard 才能在圖表區自動幫你畫出「效能比較箱型圖」！
+-  **與 Dashboard 的交接點**：在使用 API 建立測試任務時，請務必在 `task_name` 中包含 **`[curl]`** 或是 **`[dfget]`** 關鍵字（例如：`[curl] 500MB 測試`）。
