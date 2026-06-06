@@ -7,7 +7,8 @@ def init_db():
     #連線到SQLite，如果檔案不存在會自動建立
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-
+    
+    cursor.execute("PRAGMA journal_mode=WAL;")
     #1.建立Tasks Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (

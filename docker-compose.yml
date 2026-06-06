@@ -15,13 +15,30 @@ services:
     build: ./dashboard
     container_name: dashboard
     ports:
-      - "9000:8501"
+      - "9001:8501"
     volumes:
       - ./dashboard:/app
     networks:
       - dragonfly_net
     depends_on:
       - api_server
+
+  # Worker / Downloader (第 5 人)
+  worker:
+    build: ./worker
+    volumes:
+      - ./worker:/app
+    environment:
+      API_URL: "http://api_server:8000"
+      WORKER_NAME: "Worker-Node"
+      DOWNLOAD_MODE: "auto"
+      SELF_ASSIGN: "1"   # 還沒有 Scheduler 時自我指派；對接第 4 人後改為 "0"
+    networks:
+      - dragonfly_net
+    depends_on:
+      - api_server
+    # 想模擬多個 Worker 時可改用 docker-compose up --scale worker=3
+    # (使用 scale 時請把上面的 container_name 留空，本服務已無 container_name)
 
 networks:
   dragonfly_net:
