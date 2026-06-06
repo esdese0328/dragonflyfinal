@@ -107,10 +107,3 @@ python3 worker/download_adapter.py http://localhost:8080/500MB.bin /tmp/out.bin 
 ```
 
 curl vs dfget 的比較，就是把 `mode` 換成 `"dfget"` 再跑一次，比較 `duration_sec`。
-
----
-
-## 注意事項
-
-- **dfget 模式需要 Dragonfly**：worker 的 Dockerfile 裡 dfget 安裝目前是註解掉的。沒有安裝 dfget 時，`mode="dfget"` 會回傳失敗。要測 P2P 請先安裝 dfget client 並部署 Dragonfly；在那之前用 `mode="curl"`。
-- 測試檔很大、不進 git，每台機器各自用 `gen_files.sh` 產生。
