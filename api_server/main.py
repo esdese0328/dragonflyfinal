@@ -39,7 +39,7 @@ class WorkerResponseModel(BaseModel):
 
 #實作API邏輯
 #建立任務
-@app.post("/creat_task", response_model=TaskResponseModel)
+@app.post("/create_task", response_model=TaskResponseModel)
 def create_task(task: TaskCreateModel):
     #產生獨一無二的任務ID
     new_task_id = str(uuid.uuid4()) 
