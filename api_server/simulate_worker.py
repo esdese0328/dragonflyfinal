@@ -56,7 +56,7 @@ def assign_task(task_id, worker_id):
 
 def create_task(name):
     try:
-        requests.post(f"{API_URL}/creat_task", json={"task_name": name})
+        requests.post(f"{API_URL}/create_task", json={"task_name": name})
         print(f"Created new task: {name}")
     except:
         pass
