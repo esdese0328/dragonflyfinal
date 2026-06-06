@@ -40,9 +40,7 @@ REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "10"))
 # 測試模式：沒有第 4 人 Scheduler 時，Worker 自己撿 pending 任務指派給自己。
 # 正式整合時設成 "0"，把指派交給 Scheduler。
 SELF_ASSIGN = os.getenv("SELF_ASSIGN", "1") == "1"
-
-# 失敗任務的最大重試次數 (達到後不再重試，避免無限迴圈)
-MAX_RETRY = int(os.getenv("MAX_RETRY", "3"))
+# 註: retry 次數上限 / 永久 failed 的判斷由 Scheduler 統一負責，worker 不自行控制。
 
 
 class Worker:
@@ -164,11 +162,12 @@ class Worker:
             self._report_progress(task_id, 100, duration=result.duration)
             print(f"[task] {task_id} 完成 ({result.mode}) 耗時 {result.duration}s")
         else:
+            # 下載失敗一律呼叫 /retry，把任務交還給 Scheduler 重新排程。
+            # 「retry 次數是否用盡 / 是否標記 failed」由 Scheduler 統一決定
+            # (見 api /tasks/{id}/fail 的註解與 scheduler.py)，
+            # worker 不可自行放棄，否則任務會卡在 downloading 變殭屍任務。
             print(f"[task] {task_id} 下載失敗: {result.message}")
-            if retry_count < MAX_RETRY:
-                self._report_failed(task_id)
-            else:
-                print(f"[task] {task_id} 已達最大重試次數 {MAX_RETRY}，放棄重試")
+            self._report_failed(task_id)
 
     # ---- 主迴圈 --------------------------------------------------------
     def run(self):

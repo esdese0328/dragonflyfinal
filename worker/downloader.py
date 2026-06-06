@@ -222,21 +222,26 @@ def download(task: dict, progress_cb: Callable[[int], None]) -> DownloadResult:
     # 開始下載前先報一個起步進度，讓 Dashboard 立刻有反應
     progress_cb(1)
 
-    # 1) 優先用第 2 人的 adapter
+    # 0) simulate 模式：純展示用，直接走內建模擬。
+    #    (第 2 人的 adapter 只認得 curl/dfget，不能讓它攔截 simulate)
+    if mode == "simulate":
+        return _download_simulate(task, total_size, progress_cb)
+
+    # 該模式所需的工具 (curl 或 dfget)
+    tool = DFGET_BIN if mode == "dfget" else "curl"
+
+    # 工具根本不存在 (例如本機沒裝 dfget/curl) → 退回模擬，確保 demo 不中斷。
+    # 真實 Docker 環境裡 curl 一定有，所以這條只在純本機測試時生效。
+    if not _have(tool):
+        return _download_simulate(task, total_size, progress_cb)
+
+    # 1) 真實下載：優先用第 2 人的 download_adapter (curl / dfget)。
+    #    adapter 已實際執行過 (回傳 True/False)，其結果即為權威結果。
     ext = _try_external_adapter(task, mode, url, out_path, progress_cb)
     if ext is not None:
         return ext
 
-    # 2) 內建 curl / dfget；缺工具或非模擬模式失敗時，退回模擬
-    if mode == "simulate":
-        return _download_simulate(task, total_size, progress_cb)
-
+    # 2) 沒有 adapter 模組時，用本檔內建的 curl / dfget。
     if mode == "dfget":
-        if _have(DFGET_BIN):
-            return _download_dfget(url, out_path, total_size, progress_cb)
-    elif mode == "curl":
-        if _have("curl"):
-            return _download_curl(url, out_path, total_size, progress_cb)
-
-    # 工具不存在 → 模擬，確保 demo 流程不中斷
-    return _download_simulate(task, total_size, progress_cb)
+        return _download_dfget(url, out_path, total_size, progress_cb)
+    return _download_curl(url, out_path, total_size, progress_cb)
