@@ -119,7 +119,7 @@ def create_worker(worker: WorkerCreateModel):
     cursor.execute('''
                    INSERT INTO workers (worker_id, worker_name, status, last_heartbeat)
                    VALUES (?, ?, ?, ?)
-    ''', (new_worker_id, worker.worker_name, 'pending', current_time))
+    ''', (new_worker_id, worker.worker_name, 'idle', current_time))
     
     conn.commit()
     conn.close()
@@ -127,17 +127,23 @@ def create_worker(worker: WorkerCreateModel):
     return {
         "worker_id": new_worker_id,
         "worker_name": worker.worker_name,
-        "status": 'pending',
+        "status": 'idle',
         "last_heartbeat": current_time
     }
 
 #查詢Worker狀態
 @app.get("/get_workers", response_model=List[WorkerResponseModel])
-def get_workers():
+def get_workers(status: Optional[str] = None):
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM workers')
+    
+    #根據有沒有傳入status來決定SQL語法
+    if status:
+        cursor.execute('SELECT * FROM workers WHERE status = ?', (status,))
+    else:
+        cursor.execute('SELECT * FROM workers')
+        
     rows = cursor.fetchall()
     conn.close()
 
