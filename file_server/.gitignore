@@ -1,0 +1,10 @@
+# 大檔與 gen_files.sh 的產出物 — 都用 gen_files.sh 重新產生即可
+files/*.bin
+files/*.zip
+artifacts.json
+checksums.txt
+
+# 編輯器 / Python
+*.swp
+__pycache__/
+*.pyc
