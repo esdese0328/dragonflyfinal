@@ -7,8 +7,10 @@ def init_db():
     #連線到SQLite，如果檔案不存在會自動建立
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
-    cursor.execute("PRAGMA journal_mode=WAL;")
+
+    # 註: 不使用 WAL 模式。WAL 需要 mmap 的 -shm 共享記憶體檔，
+    # 在 Docker Desktop (Windows/macOS) 的 bind-mount 上無法建立，
+    # 高並發時會出現 "unable to open database file"。預設 journal 模式在 bind-mount 上正常。
     #1.建立Tasks Table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
