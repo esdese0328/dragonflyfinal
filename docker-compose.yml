@@ -10,6 +10,15 @@ services:
       - ./api_server:/app
     networks:
       - dragonfly_net
+  
+# File Server  提供原始測試檔, 供 worker 下載
+  file-server:
+    build: ./file_server
+    container_name: file-server      # worker 預設 FILE_SERVER=http://file-server
+    ports:
+      - "8080:80"                    # 可選: 本機用 http://localhost:8080 驗證
+    networks:
+      - dragonfly_net
 
   dashboard:
     build: ./dashboard
