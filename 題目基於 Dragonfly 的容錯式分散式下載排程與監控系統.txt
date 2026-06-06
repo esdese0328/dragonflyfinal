@@ -1,0 +1,132 @@
+題目:基於 Dragonfly 的容錯式分散式下載排程與監控系統
+
+第 1 人：系統架構與分散式模式設計
+
+負責整體設計與報告主軸。
+
+工作內容
+1. 定義專案目標
+2. 畫系統架構圖
+3. 畫任務流程圖
+4. 整理分散式系統模式
+5. 說明和期中 Demo 的差異
+6. 設計 Demo 劇本
+產出
+架構圖
+流程圖
+分散式模式對照表
+簡報故事線
+第 2 人：Artifact Repository 與 Download Adapter
+
+負責檔案來源與下載介面，不再負責大家的環境安裝。
+
+工作內容
+1. 建立 File Server
+2. 準備 100MB / 500MB / 1GB 測試檔案
+3. 建立 artifacts.json
+4. 撰寫 download_adapter.py
+5. 支援 curl 與 dfget 兩種模式
+6. 建立 checksum 驗證
+產出
+File Server
+測試檔案
+artifacts.json
+download_adapter.py
+checksum 驗證工具
+第 3 人：API Server 與 Task DB
+
+負責系統入口與任務資料管理。
+
+工作內容
+1. 實作 POST /tasks 建立任務
+2. 實作 GET /tasks 查詢任務
+3. 實作 GET /workers 查詢 Worker
+4. 設計 task table
+5. 設計 worker table
+6. 儲存任務狀態與下載結果
+產出
+FastAPI server
+SQLite / Redis DB
+Task API
+Worker API
+DB schema
+第 4 人：Scheduler
+
+負責任務排程、故障偵測與 retry。
+
+工作內容
+1. 掃描 pending 任務
+2. 找出 online 且 idle 的 Worker
+3. 分配任務給 Worker
+4. 實作 round-robin 或 least-busy 策略
+5. 偵測 heartbeat timeout
+6. 將失敗任務重新排程
+7. 控制 retry 次數
+產出
+scheduler.py
+排程策略
+heartbeat timeout 偵測
+retry mechanism
+第 5 人：Worker / Downloader
+
+負責實際執行下載任務。
+
+工作內容
+1. Worker 啟動後註冊 worker_id
+2. 定期送 heartbeat
+3. 查詢自己是否有任務
+4. 呼叫第 2 人的 download_adapter.py
+5. 使用 dfget 下載檔案
+6. 回報 success / failed / duration
+7. 支援 Worker 被刪除後重新加入
+產出
+worker.py
+heartbeat 功能
+dfget 下載整合
+任務結果回報
+Worker Dockerfile
+第 6 人：Dashboard / Monitoring UI
+
+負責展示畫面。
+
+工作內容
+1. 顯示任務列表
+2. 顯示 Worker 狀態
+3. 顯示下載時間
+4. 顯示成功 / 失敗 / retry 次數
+5. 顯示 benchmark 圖表
+6. 顯示 fault recovery log
+產出
+Streamlit Dashboard
+任務狀態表
+Worker 狀態表
+下載時間圖表
+故障恢復紀錄
+第 7 人：Benchmark 與 Fault Recovery 實驗
+
+負責實驗設計與結果分析。
+
+工作內容
+1. 設計 curl vs dfget 測試
+2. 設計 first download vs cached download 測試
+3. 設計 kill worker 測試
+4. 設計 retry 成功率測試
+5. 蒐集下載時間
+6. 畫實驗圖表
+7. 分析系統是否達成目標
+產出
+benchmark script
+測試表格
+圖表
+故障測試截圖
+實驗分析
+
+調整後的 7 人分工總表
+人員 角色 主要負責內容
+第 1 人 系統架構與分散式模式設計 整體架構、流程圖、分散式系統模式、Demo 劇本
+第 2 人 Artifact Repository 與 Download Adapter 檔案伺服器、測試檔案、檔案 metadata、Dragonfly / curl 下載介面
+第 3 人 API Server 與 Task DB 任務建立、任務查詢、任務狀態管理、資料庫設計
+第 4 人 Scheduler 任務分派、Worker 選擇、Heartbeat timeout、Retry
+第 5 人 Worker / Downloader Worker 執行下載、Heartbeat、回報結果、失敗處理
+第 6 人 Dashboard / Monitoring UI 任務狀態、Worker 狀態、下載時間、圖表與監控畫面
+第 7 人 Benchmark 與 Fault Recovery 實驗 測速、故障注入、結果分析、實驗圖表
