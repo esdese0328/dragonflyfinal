@@ -22,6 +22,7 @@ worker.py — Worker / Downloader (第 5 人)
 
 import os
 import time
+import socket
 import threading
 import requests
 
@@ -32,7 +33,9 @@ import downloader
 # 設定
 # ---------------------------------------------------------------------------
 API_URL = os.getenv("API_URL", "http://localhost:8000")
-WORKER_NAME = os.getenv("WORKER_NAME", "Worker-Node")
+# 穩定身分: 名稱後面接容器主機名 (scale 時每個 replica 各自唯一, 且重啟後不變)。
+# 這樣 worker 重啟時可重用既有的 worker_id, 不會在 DB 一直長出新的殘留行。
+WORKER_NAME = f"{os.getenv('WORKER_NAME', 'Worker-Node')}-{socket.gethostname()}"
 HEARTBEAT_INTERVAL = float(os.getenv("HEARTBEAT_INTERVAL", "5"))   # 心跳間隔(秒)
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "3"))            # 查任務間隔(秒)
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "10"))
@@ -62,14 +65,35 @@ class Worker:
     def register(self):
         while not self._stop.is_set():
             try:
+                # 先看 DB 裡有沒有「同名的自己」(上次啟動留下的)，有就重用，
+                # 避免每次重啟都長出一筆新的 worker 殘留行。
+                existing = self._find_existing_id()
+                if existing:
+                    self.worker_id = existing
+                    self._put(f"/workers/{self.worker_id}/heartbeat")  # 立刻復活
+                    print(f"[register] 重用既有身分 worker_id={self.worker_id} ({WORKER_NAME})")
+                    return
+
                 r = self._post("/create_worker", {"worker_name": WORKER_NAME})
                 r.raise_for_status()
                 self.worker_id = r.json()["worker_id"]
-                print(f"[register] 註冊成功 worker_id={self.worker_id}")
+                print(f"[register] 註冊成功 worker_id={self.worker_id} ({WORKER_NAME})")
                 return
             except Exception as e:
                 print(f"[register] 註冊失敗，2 秒後重試: {e}")
                 time.sleep(2)
+
+    def _find_existing_id(self):
+        """回傳 DB 中與本 worker 同名的 worker_id (沒有則 None)。"""
+        try:
+            r = self._get("/get_workers")
+            r.raise_for_status()
+            for w in r.json():
+                if w.get("worker_name") == WORKER_NAME:
+                    return w["worker_id"]
+        except Exception:
+            pass
+        return None
 
     # ---- 7. 偵測自己是否被刪除 ----------------------------------------
     def _is_still_registered(self) -> bool:
