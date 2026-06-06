@@ -11,6 +11,24 @@ services:
     networks:
       - dragonfly_net
 
+  #Scheduler 排程器
+  scheduler:
+    build: ./scheduler
+    container_name: scheduler
+    environment:
+      - API_URL=http://api_server:8000
+      - SCAN_INTERVAL=3
+      - HEARTBEAT_TIMEOUT=15
+      - MAX_RETRY=3
+      - STRATEGY=round-robin
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./scheduler:/app
+    networks:
+      - dragonfly_net
+    depends_on:
+      - api_server
+
   dashboard:
     build: ./dashboard
     container_name: dashboard

@@ -214,12 +214,28 @@ def retry_task(task_id: str):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        UPDATE tasks 
+        UPDATE tasks
         SET retry_count = retry_count + 1, status = 'pending', worker_id = NULL
         WHERE task_id = ?
     ''', (task_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return {"message": f"Task {task_id} set to retry"}
+
+#任務永久失敗 (供 Scheduler 在 retry 次數用盡時呼叫)
+@app.put("/tasks/{task_id}/fail")
+def fail_task(task_id: str):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE tasks
+        SET status = 'failed'
+        WHERE task_id = ?
+    ''', (task_id,))
+
+    conn.commit()
+    conn.close()
+
+    return {"message": f"Task {task_id} marked as failed"}
