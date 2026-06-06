@@ -1,0 +1,31 @@
+# 現場 Demo 用的 override 檔 (搭配 docker-compose.yml 一起使用)
+#
+# 用法:
+#   docker-compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build --scale worker=3
+#
+# 效果:
+#   1) 把 Worker 切到 simulate 模式 -> 不需要 file-server / 真實檔案, 下載一定成功
+#   2) 啟動 seeder 服務 -> 自動持續產生任務, 畫面永遠有東西在跑
+#
+# 關閉:
+#   docker-compose -f docker-compose.yml -f docker-compose.demo.yml down
+
+services:
+  worker:
+    environment:
+      DOWNLOAD_MODE: "simulate"   # 模擬下載, 展示用, 不依賴 file-server
+      SELF_ASSIGN: "0"            # 仍由真正的 Scheduler 指派, 展示完整流程
+      SIMULATE_SECONDS: "30"      # 每個任務模擬約 30 秒: 進度條看得清楚, 且 > 心跳逾時(15s)
+      HEARTBEAT_INTERVAL: "3"     # 心跳勤一點, 讓存活/逾時的對比更明顯
+
+  seeder:
+    build: ./demo
+    environment:
+      - API_URL=http://api_server:8000
+      - TARGET_ACTIVE=6           # 維持 6 個進行中任務
+      - SEED_INTERVAL=8           # 每 8 秒檢查補單
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dragonfly_net
+    depends_on:
+      - api_server
