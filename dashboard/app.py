@@ -113,6 +113,32 @@ with tab3:
             else:
                 st.info("尚未有包含 '[curl]' 或 '[dfget]' 關鍵字的 Benchmark 測試資料。")
 
+            df_cache = df_valid_duration[
+                df_valid_duration['task_name'].str.contains(
+                    'first-download|cached-download', case=False, na=False
+                )
+            ].copy()
+            if not df_cache.empty:
+                df_cache['download_type'] = df_cache['task_name'].apply(
+                    lambda x: 'cached-download' if 'cached-download' in x.lower() else 'first-download'
+                )
+                st.subheader("Dragonfly 快取下載比較")
+                fig_cache = px.bar(
+                    df_cache,
+                    x='download_type',
+                    y='duration',
+                    color='download_type',
+                    text='duration',
+                    labels={'duration': '耗時 (秒)', 'download_type': '下載類型'},
+                    color_discrete_sequence=px.colors.qualitative.Set2,
+                )
+                st.plotly_chart(fig_cache, use_container_width=True)
+
+                first = df_cache[df_cache['download_type'] == 'first-download']['duration'].iloc[-1:]
+                cached = df_cache[df_cache['download_type'] == 'cached-download']['duration'].iloc[-1:]
+                if not first.empty and not cached.empty and cached.iloc[0] > 0:
+                    st.metric("Dragonfly 快取加速倍數", f"{first.iloc[0] / cached.iloc[0]:.2f}x")
+
             st.subheader("個別下載耗時")
             fig2 = px.bar(df_valid_duration, x='task_name', y='duration', color='status',
                           labels={'duration': '耗時 (秒)', 'task_name': '任務名稱'},

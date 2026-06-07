@@ -23,7 +23,7 @@ services:
   #Scheduler 排程器
   scheduler:
     build: ./scheduler
-    container_name: scheduler
+    container_name: task-scheduler
     environment:
       - API_URL=http://api_server:8000
       - SCAN_INTERVAL=3
@@ -59,6 +59,9 @@ services:
       API_URL: "http://api_server:8000"
       WORKER_NAME: "Worker-Node"
       DOWNLOAD_MODE: "auto"
+      FILE_SERVER: "http://host.docker.internal:8800"
+      DFGET_PROXY: "http://host.docker.internal:4001"
+      PYTHONUNBUFFERED: "1"
       SELF_ASSIGN: "0"   # 已對接第 4 人 Scheduler，指派交由 Scheduler 統一負責
     networks:
       - dragonfly_net

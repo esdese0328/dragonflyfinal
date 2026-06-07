@@ -43,9 +43,18 @@ def _content_length(url, timeout=10):
 
 def _build_cmd(url, output, mode):
     if mode == "dfget":
+        proxy = os.getenv("DFGET_PROXY")
+        if proxy:
+            return [
+                "curl", "-fsSL",
+                "--proxy", proxy,
+                "-H", "X-Dragonfly-Use-P2P: true",
+                "-o", output,
+                url,
+            ]
         return [os.getenv("DFGET_BIN", "dfget"), "-O", output, url]
     if mode == "curl":
-        return ["curl", "-fSL", "-o", output, url]
+        return ["curl", "-fsSL", "-o", output, url]
     raise ValueError(f"unsupported mode: {mode}")
 
 
@@ -61,7 +70,13 @@ def download(url, output, mode="curl", progress_callback=None, timeout=1800):
     """
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
 
-    real_bin = os.getenv("DFGET_BIN", "dfget") if mode == "dfget" else "curl"
+    real_bin = (
+        "curl"
+        if mode == "dfget" and os.getenv("DFGET_PROXY")
+        else os.getenv("DFGET_BIN", "dfget")
+        if mode == "dfget"
+        else "curl"
+    )
     if shutil.which(real_bin) is None:
         # 該模式的工具不存在 (例如尚未安裝 Dragonfly dfget)
         return False
