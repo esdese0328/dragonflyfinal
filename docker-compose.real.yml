@@ -1,0 +1,48 @@
+# 真實下載 override (搭配 docker-compose.yml 一起使用)
+#
+# 與 docker-compose.demo.yml 的差別:
+#   demo  = simulate, 不傳輸任何位元組 (穩定展示用)
+#   real  = curl 真實 HTTP 下載, worker 真的從 nginx file-server 抓真實檔案
+#
+# 前置作業 (只需一次): 產生測試檔到 file_server/files/
+#   見 README 或執行 scripts 產生 100MB.bin / 500MB.bin
+#
+# 用法:
+#   docker-compose -f docker-compose.yml -f docker-compose.real.yml up -d --scale worker=3
+# 開啟 Dashboard: http://localhost:9001
+#
+# 關閉:
+#   docker-compose -f docker-compose.yml -f docker-compose.real.yml down
+#
+# 注意: dfget (Dragonfly P2P) 需另外部署 Dragonfly 叢集並在 worker 映像安裝 dfget,
+#       此 override 只做真實的 curl 下載。
+
+services:
+  # 用 bind-mount 直接提供 file_server/files/ 裡的檔案 (免 rebuild image)
+  file-server:
+    volumes:
+      - ./file_server/files:/usr/share/nginx/html:ro
+
+  worker:
+    environment:
+      DOWNLOAD_MODE: "curl"        # 真實 curl 下載 (呼叫第 2 人的 download_adapter)
+      SELF_ASSIGN: "0"             # 由 Scheduler 指派
+      FILE_SERVER: "http://file-server"
+
+  # 任務產生器: 真實模式只發 [curl]、且只用實際存在的檔案大小
+  seeder:
+    build: ./demo
+    volumes:
+      - ./demo:/app          # 掛入最新 seed.py, 免 rebuild
+    environment:
+      - API_URL=http://api_server:8000
+      - TARGET_ACTIVE=4
+      - SEED_INTERVAL=10
+      - TOOLS=[curl]
+      - SIZES=100MB,500MB
+      - PYTHONUNBUFFERED=1
+    networks:
+      - dragonfly_net
+    depends_on:
+      - api_server
+      - file-server

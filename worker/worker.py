@@ -22,6 +22,7 @@ worker.py — Worker / Downloader (第 5 人)
 
 import os
 import time
+import socket
 import threading
 import requests
 
@@ -32,7 +33,9 @@ import downloader
 # 設定
 # ---------------------------------------------------------------------------
 API_URL = os.getenv("API_URL", "http://localhost:8000")
-WORKER_NAME = os.getenv("WORKER_NAME", "Worker-Node")
+# 穩定身分: 名稱後面接容器主機名 (scale 時每個 replica 各自唯一, 且重啟後不變)。
+# 這樣 worker 重啟時可重用既有的 worker_id, 不會在 DB 一直長出新的殘留行。
+WORKER_NAME = f"{os.getenv('WORKER_NAME', 'Worker-Node')}-{socket.gethostname()}"
 HEARTBEAT_INTERVAL = float(os.getenv("HEARTBEAT_INTERVAL", "5"))   # 心跳間隔(秒)
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "3"))            # 查任務間隔(秒)
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "10"))
@@ -40,9 +43,7 @@ REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "10"))
 # 測試模式：沒有第 4 人 Scheduler 時，Worker 自己撿 pending 任務指派給自己。
 # 正式整合時設成 "0"，把指派交給 Scheduler。
 SELF_ASSIGN = os.getenv("SELF_ASSIGN", "1") == "1"
-
-# 失敗任務的最大重試次數 (達到後不再重試，避免無限迴圈)
-MAX_RETRY = int(os.getenv("MAX_RETRY", "3"))
+# 註: retry 次數上限 / 永久 failed 的判斷由 Scheduler 統一負責，worker 不自行控制。
 
 
 class Worker:
@@ -64,14 +65,35 @@ class Worker:
     def register(self):
         while not self._stop.is_set():
             try:
+                # 先看 DB 裡有沒有「同名的自己」(上次啟動留下的)，有就重用，
+                # 避免每次重啟都長出一筆新的 worker 殘留行。
+                existing = self._find_existing_id()
+                if existing:
+                    self.worker_id = existing
+                    self._put(f"/workers/{self.worker_id}/heartbeat")  # 立刻復活
+                    print(f"[register] 重用既有身分 worker_id={self.worker_id} ({WORKER_NAME})")
+                    return
+
                 r = self._post("/create_worker", {"worker_name": WORKER_NAME})
                 r.raise_for_status()
                 self.worker_id = r.json()["worker_id"]
-                print(f"[register] 註冊成功 worker_id={self.worker_id}")
+                print(f"[register] 註冊成功 worker_id={self.worker_id} ({WORKER_NAME})")
                 return
             except Exception as e:
                 print(f"[register] 註冊失敗，2 秒後重試: {e}")
                 time.sleep(2)
+
+    def _find_existing_id(self):
+        """回傳 DB 中與本 worker 同名的 worker_id (沒有則 None)。"""
+        try:
+            r = self._get("/get_workers")
+            r.raise_for_status()
+            for w in r.json():
+                if w.get("worker_name") == WORKER_NAME:
+                    return w["worker_id"]
+        except Exception:
+            pass
+        return None
 
     # ---- 7. 偵測自己是否被刪除 ----------------------------------------
     def _is_still_registered(self) -> bool:
@@ -164,11 +186,12 @@ class Worker:
             self._report_progress(task_id, 100, duration=result.duration)
             print(f"[task] {task_id} 完成 ({result.mode}) 耗時 {result.duration}s")
         else:
+            # 下載失敗一律呼叫 /retry，把任務交還給 Scheduler 重新排程。
+            # 「retry 次數是否用盡 / 是否標記 failed」由 Scheduler 統一決定
+            # (見 api /tasks/{id}/fail 的註解與 scheduler.py)，
+            # worker 不可自行放棄，否則任務會卡在 downloading 變殭屍任務。
             print(f"[task] {task_id} 下載失敗: {result.message}")
-            if retry_count < MAX_RETRY:
-                self._report_failed(task_id)
-            else:
-                print(f"[task] {task_id} 已達最大重試次數 {MAX_RETRY}，放棄重試")
+            self._report_failed(task_id)
 
     # ---- 主迴圈 --------------------------------------------------------
     def run(self):

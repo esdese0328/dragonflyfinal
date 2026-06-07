@@ -1,6 +1,6 @@
 # Dragonfly 容錯式分散式下載排程與監控系統
 
-目前整合了**第 3 人 (API Server)** 與 **第 6 人 (Dashboard)** 的部分，並提供了一支測試模擬腳本，可以在缺少真實 Worker 的情況下獨立運行與展示畫面。
+目前已整合 **第 2 人 (File Server / Download Adapter)**、**第 3 人 (API Server)**、**第 4 人 (Scheduler)**、**第 5 人 (Worker / Downloader)** 與 **第 6 人 (Dashboard)** 的部分。系統已能用真實 Worker 端到端運作；同時仍保留一支測試模擬腳本，可在不啟動 Worker 的情況下獨立展示畫面。
 
 ---
 
@@ -55,6 +55,59 @@ Remove-Item api_server\scheduler.db -ErrorAction SilentlyContinue
 
 ---
 
+## Worker / Downloader (第 5 人)
+
+負責實際執行下載任務的節點，原始碼位於 [`worker/`](worker/)。整套系統用
+`docker-compose up -d --build` 啟動後，Worker 會自動運作，無需額外操作。
+
+### 運作流程
+1. **註冊**：啟動後呼叫 `POST /create_worker` 取得 `worker_id`。
+2. **心跳**：背景執行緒每隔數秒呼叫 `PUT /workers/{worker_id}/heartbeat`，
+   讓 Scheduler 與 Dashboard 知道自己存活。
+3. **查任務**：輪詢 `GET /get_tasks`，撿出「指派給自己、狀態為 `downloading`」的任務。
+4. **下載**：呼叫第 2 人的 `download_adapter.py`，用 **curl** 或 **dfget** 下載檔案，
+   下載過程中持續呼叫 `PUT /tasks/{task_id}/progress` 推進度條。
+5. **回報結果**：
+   - 成功 → 進度推到 100 並帶上 `duration`，API 自動標記 `completed`。
+   - 失敗 → 呼叫 `PUT /tasks/{task_id}/retry`，交還給 Scheduler 重新排程
+     （retry 次數上限與永久 `failed` 的判斷由 Scheduler 統一負責）。
+6. **容錯重生**：若 Worker 被刪除（資料列被移除），心跳時會偵測到自己已不在
+   `GET /get_workers` 名單中，並自動重新註冊加入。
+
+### 檔案
+| 檔案 | 說明 |
+|---|---|
+| `worker/worker.py` | 主程式：註冊、心跳、輪詢、結果回報 |
+| `worker/downloader.py` | 下載整合層：優先用第 2 人 adapter，否則內建 curl/dfget，再不行退回模擬 |
+| `worker/Dockerfile` / `worker/requirements.txt` | 容器化設定 |
+
+### 模擬多個 Worker
+想觀察 Scheduler 把任務分配給不同節點，可同時起多個 Worker：
+```powershell
+docker-compose up -d --build --scale worker=3
+```
+
+### 不用 Docker，單機快速測試
+在 API Server 已啟動的前提下，可直接跑 Worker（無檔案伺服器 / dfget 時會自動退回
+「模擬下載」，仍可在 Dashboard 看到心跳與進度）：
+```powershell
+cd worker
+pip install -r requirements.txt
+$env:API_URL="http://localhost:8000"; $env:DOWNLOAD_MODE="simulate"; python worker.py
+```
+
+### 主要環境變數
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `API_URL` | `http://api_server:8000` | API Server 位址 |
+| `WORKER_NAME` | `Worker-Node` | 註冊用名稱 |
+| `DOWNLOAD_MODE` | `auto` | `auto`/`curl`/`dfget`/`simulate`；auto 依任務名 `[curl]`/`[dfget]` 關鍵字決定 |
+| `SELF_ASSIGN` | `0` | 是否自我指派任務。整合 Scheduler 後設 `0`；單機無 Scheduler 測試時可設 `1` |
+| `HEARTBEAT_INTERVAL` | `5` | 心跳間隔（秒） |
+| `POLL_INTERVAL` | `3` | 查任務間隔（秒） |
+
+---
+
 ## 專案待辦事項與交接清單 (To-Do)
 
 目前的 Dashboard 呈現的是由模擬器產生的假數據。接下來要將系統推向完成，還需要依賴以下組員的進度，請各負責人進行後續開發與對接：
@@ -71,9 +124,10 @@ Remove-Item api_server\scheduler.db -ErrorAction SilentlyContinue
 -  取代模擬器的任務分配功能，實作掃描 pending 任務並分配給 idle Worker 的邏輯。
 -  **與 Dashboard 的交接點**：需實作偵測 Worker Heartbeat timeout。當 Worker 死亡時，請確實讓任務的 `retry_count + 1` 並設回 `pending`，Dashboard 才能正確畫出**「故障恢復紀錄」**。
 
-### 第 5 人 (Worker / Downloader)
--  實作真正的 Worker：向 API 註冊 ID，並實際呼叫第 2 人的 Adapter 下載檔案。
--  **與 Dashboard 的交接點**：請務必定時呼叫 `PUT /workers/{worker_id}/heartbeat` 更新存活狀態，並在下載過程中不斷呼叫 `PUT /tasks/{task_id}/progress` 推進進度條。
+### 第 5 人 (Worker / Downloader) ✅ 已完成
+- ✅ 已實作真正的 Worker：向 API 註冊 ID、定時送 heartbeat、查詢自己的任務、呼叫第 2 人的 Adapter 以 curl/dfget 下載、回報 success/failed/duration，並支援被刪除後自動重新加入。
+- ✅ **與 Dashboard 的交接點**：下載過程持續呼叫 `PUT /tasks/{task_id}/progress` 推進度條、定時呼叫 `PUT /workers/{worker_id}/heartbeat` 更新存活狀態。
+- 詳細說明見上方 [Worker / Downloader (第 5 人)](#worker--downloader-第-5-人) 章節與 [`worker/`](worker/) 原始碼。
 
 ### 第 7 人 (Benchmark 與 Fault Recovery 實驗)
 -  設計測速腳本與故障注入測試（例如故意 kill worker 來測試第 4 人的機制）。

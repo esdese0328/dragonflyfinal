@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(pkill -f \"uvicorn main:app\")",
-      "Bash(pkill -f \"worker.py\")"
-    ]
-  }
-}

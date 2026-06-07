@@ -191,11 +191,19 @@ def _download_simulate(task, total_size, progress_cb) -> DownloadResult:
     後備模擬：沒有檔案伺服器 / dfget / curl 時，讓整條流程仍可展示。
     依檔案大小給一個合理的「假耗時」，並平滑推進進度。
     """
-    size = total_size or (100 * 1024 * 1024)
-    # 假設約 50MB/s，並加一點隨機性
-    fake_total = max(3.0, size / (50 * 1024 * 1024))
+    # SIMULATE_SECONDS > 0 時，固定用這個秒數當每個任務的「假耗時」(加一點隨機)，
+    # 適合現場 Demo：進度條看得清楚，且大於心跳逾時，kill worker 時故障恢復必定可見。
+    # 預設 0 = 依檔案大小估算 (約 50MB/s)。
+    sim_secs = float(os.getenv("SIMULATE_SECONDS", "0"))
+    if sim_secs > 0:
+        import random
+        fake_total = sim_secs * random.uniform(0.8, 1.3)
+    else:
+        size = total_size or (100 * 1024 * 1024)
+        fake_total = max(3.0, size / (50 * 1024 * 1024))
+
     start = time.time()
-    steps = 20
+    steps = 25
     for i in range(1, steps):
         time.sleep(fake_total / steps)
         progress_cb(int(i / steps * 100))
@@ -222,21 +230,35 @@ def download(task: dict, progress_cb: Callable[[int], None]) -> DownloadResult:
     # 開始下載前先報一個起步進度，讓 Dashboard 立刻有反應
     progress_cb(1)
 
-    # 1) 優先用第 2 人的 adapter
-    ext = _try_external_adapter(task, mode, url, out_path, progress_cb)
-    if ext is not None:
-        return ext
-
-    # 2) 內建 curl / dfget；缺工具或非模擬模式失敗時，退回模擬
+    # 0) simulate 模式：純展示用，直接走內建模擬。
+    #    (第 2 人的 adapter 只認得 curl/dfget，不能讓它攔截 simulate)
     if mode == "simulate":
         return _download_simulate(task, total_size, progress_cb)
 
-    if mode == "dfget":
-        if _have(DFGET_BIN):
-            return _download_dfget(url, out_path, total_size, progress_cb)
-    elif mode == "curl":
-        if _have("curl"):
-            return _download_curl(url, out_path, total_size, progress_cb)
+    # 該模式所需的工具 (curl 或 dfget)
+    tool = DFGET_BIN if mode == "dfget" else "curl"
 
-    # 工具不存在 → 模擬，確保 demo 流程不中斷
-    return _download_simulate(task, total_size, progress_cb)
+    # 工具根本不存在 (例如本機沒裝 dfget/curl) → 退回模擬，確保 demo 不中斷。
+    # 真實 Docker 環境裡 curl 一定有，所以這條只在純本機測試時生效。
+    if not _have(tool):
+        return _download_simulate(task, total_size, progress_cb)
+
+    try:
+        # 1) 真實下載：優先用第 2 人的 download_adapter (curl / dfget)。
+        #    adapter 已實際執行過 (回傳 True/False)，其結果即為權威結果。
+        ext = _try_external_adapter(task, mode, url, out_path, progress_cb)
+        if ext is not None:
+            return ext
+
+        # 2) 沒有 adapter 模組時，用本檔內建的 curl / dfget。
+        if mode == "dfget":
+            return _download_dfget(url, out_path, total_size, progress_cb)
+        return _download_curl(url, out_path, total_size, progress_cb)
+    finally:
+        # 下載完即刪暫存檔，避免長時間執行把磁碟塞爆 (除非 KEEP_DOWNLOADS=1)
+        if os.getenv("KEEP_DOWNLOADS", "0") != "1":
+            try:
+                if os.path.exists(out_path):
+                    os.remove(out_path)
+            except OSError:
+                pass

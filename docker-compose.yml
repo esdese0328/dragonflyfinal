@@ -64,6 +64,8 @@ services:
       - dragonfly_net
     depends_on:
       - api_server
+      - scheduler
+      - file-server
     # 想模擬多個 Worker 時可改用 docker-compose up --scale worker=3
     # (使用 scale 時請把上面的 container_name 留空，本服務已無 container_name)
 
