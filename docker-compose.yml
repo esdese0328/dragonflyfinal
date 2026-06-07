@@ -16,7 +16,7 @@ services:
     build: ./file_server
     container_name: file-server      # worker 預設 FILE_SERVER=http://file-server
     ports:
-      - "8080:80"                    # 可選: 本機用 http://localhost:8080 驗證
+      - "8800:80"                    # 可選: 本機用 http://localhost:8800 驗證 (8071-8770 被 Windows 保留)
     networks:
       - dragonfly_net
 
@@ -59,7 +59,7 @@ services:
       API_URL: "http://api_server:8000"
       WORKER_NAME: "Worker-Node"
       DOWNLOAD_MODE: "auto"
-      SELF_ASSIGN: "0"   # Scheduler 已整合，任務指派交給 scheduler，避免雙重指派
+      SELF_ASSIGN: "0"   # 已對接第 4 人 Scheduler，指派交由 Scheduler 統一負責
     networks:
       - dragonfly_net
     depends_on:
